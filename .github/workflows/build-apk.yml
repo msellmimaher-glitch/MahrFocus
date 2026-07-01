@@ -27,6 +27,24 @@ jobs:
         with:
           gradle-version: 8.9
 
+      - name: Corriger les imports Compose manquants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("app/src/main/java/com/maher/focus/ui/screens")
+          for file in root.glob("*.kt"):
+              text = file.read_text()
+              if "Column(" in text and "import androidx.compose.foundation.layout.Column" not in text:
+                  text = text.replace(
+                      "package com.maher.focus.ui.screens\n",
+                      "package com.maher.focus.ui.screens\n\nimport androidx.compose.foundation.layout.Column\n",
+                      1
+                  )
+                  file.write_text(text)
+                  print(f"Import ajouté dans {file}")
+          PY
+
       - name: Compiler l'APK debug
         run: gradle :app:assembleDebug --no-daemon
 
