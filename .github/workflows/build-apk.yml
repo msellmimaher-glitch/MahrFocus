@@ -27,23 +27,51 @@ jobs:
         with:
           gradle-version: 8.9
 
-      - name: Corriger les imports Compose manquants
+      - name: Corriger fortement les imports Compose
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          root = Path("app/src/main/java/com/maher/focus/ui/screens")
-          for file in root.glob("*.kt"):
-              text = file.read_text()
-              if "Column(" in text and "import androidx.compose.foundation.layout.Column" not in text:
-                  text = text.replace(
-                      "package com.maher.focus.ui.screens\n",
-                      "package com.maher.focus.ui.screens\n\nimport androidx.compose.foundation.layout.Column\n",
-                      1
-                  )
-                  file.write_text(text)
-                  print(f"Import ajouté dans {file}")
+          root = Path("app/src/main/java")
+          files = list(root.rglob("*.kt"))
+
+          for file in files:
+              text = file.read_text(encoding="utf-8")
+
+              needs_layout = any(word in text for word in [
+                  "Column(", "Row(", "Spacer(", "Box(", "LazyColumn("
+              ])
+
+              if not needs_layout:
+                  continue
+
+              if "import androidx.compose.foundation.layout.*" in text:
+                  continue
+
+              # Supprime les imports layout incomplets pour éviter les doublons inutiles
+              text = re.sub(
+                  r"import androidx\.compose\.foundation\.layout\.Column\s*\n",
+                  "",
+                  text
+              )
+
+              # Ajoute l'import juste après la ligne package, même avec Windows CRLF
+              text = re.sub(
+                  r"(package\s+[^\r\n]+[\r\n]+)",
+                  r"\1\nimport androidx.compose.foundation.layout.*\n",
+                  text,
+                  count=1
+              )
+
+              file.write_text(text, encoding="utf-8")
+              print(f"Import layout ajouté dans {file}")
+
           PY
+
+      - name: Vérifier les imports corrigés
+        run: |
+          grep -R "foundation.layout" app/src/main/java/com/maher/focus/ui/screens || true
 
       - name: Compiler l'APK debug
         run: gradle :app:assembleDebug --no-daemon
